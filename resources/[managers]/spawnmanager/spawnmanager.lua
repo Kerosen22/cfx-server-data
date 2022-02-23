@@ -1,3 +1,5 @@
+-- C: Andrew T.
+
 -- in-memory spawnpoint array for this script execution instance
 local spawnPoints = {}
 
@@ -222,23 +224,14 @@ function spawnPlayer(spawnIdx, cb)
 
         if type(spawnIdx) == 'table' then
             spawn = spawnIdx
-
-            -- prevent errors when passing spawn table
-            spawn.x = spawn.x + 0.00
-            spawn.y = spawn.y + 0.00
-            spawn.z = spawn.z + 0.00
-
-            spawn.heading = spawn.heading and (spawn.heading + 0.00) or 0
         else
             spawn = spawnPoints[spawnIdx]
         end
 
-        if not spawn.skipFade then
-            DoScreenFadeOut(500)
+        DoScreenFadeOut(500)
 
-            while not IsScreenFadedOut() do
-                Citizen.Wait(0)
-            end
+        while not IsScreenFadedOut() do
+            Citizen.Wait(0)
         end
 
         -- validate the index
@@ -270,10 +263,6 @@ function spawnPlayer(spawnIdx, cb)
             -- release the player model
             SetModelAsNoLongerNeeded(spawn.model)
             
-            -- RDR3 player model bits
-            if N_0x283978a15512b2fe then
-				N_0x283978a15512b2fe(PlayerPedId(), true)
-            end
         end
 
         -- preload collisions for the spawnpoint
@@ -293,17 +282,21 @@ function spawnPlayer(spawnIdx, cb)
         RemoveAllPedWeapons(ped) -- TODO: make configurable (V behavior?)
         ClearPlayerWantedLevel(PlayerId())
 
-        -- why is this even a flag?
-        --SetCharWillFlyThroughWindscreen(ped, false)
+        if GetEntityModel(ped) == GetHashKey("mp_m_freemode_01") then
+            SetPedHeadBlendData(ped, 0, 0, 0, 15, 0, 0, 0, 1.0, 0, false)
+            SetPedComponentVariation(ped, 11, 0, 11, 0)
+            SetPedComponentVariation(ped, 8, 0, 1, 0)
+            SetPedComponentVariation(ped, 6, 1, 2, 0)
+            SetPedHeadOverlayColor(ped, 1, 1, 0, 0)
+            SetPedHeadOverlayColor(ped, 2, 1, 0, 0)
+            SetPedHeadOverlayColor(ped, 4, 2, 0, 0)
+            SetPedHeadOverlayColor(ped, 5, 2, 0, 0)
+            SetPedHeadOverlayColor(ped, 8, 2, 0, 0)
+            SetPedHeadOverlayColor(ped, 10, 1, 0, 0)
+            SetPedHeadOverlay(ped, 1, 0, 0.0)
+            SetPedHairColor(ped, 1, 1)
+        end
 
-        -- set primary camera heading
-        --SetGameCamHeading(spawn.heading)
-        --CamRestoreJumpcut(GetGameCam())
-
-        -- load the scene; streaming expects us to do it
-        --ForceLoadingScreen(true)
-        --loadScene(spawn.x, spawn.y, spawn.z)
-        --ForceLoadingScreen(false)
 
         local time = GetGameTimer()
 
@@ -334,43 +327,17 @@ function spawnPlayer(spawnIdx, cb)
     end)
 end
 
--- automatic spawning monitor thread, too
-local respawnForced
-local diedAt
+local fspawn = false
 
-Citizen.CreateThread(function()
-    -- main loop thing
-    while true do
-        Citizen.Wait(50)
-
-        local playerPed = PlayerPedId()
-
-        if playerPed and playerPed ~= -1 then
-            -- check if we want to autospawn
-            if autoSpawnEnabled then
-                if NetworkIsPlayerActive(PlayerId()) then
-                    if (diedAt and (math.abs(GetTimeDifference(GetGameTimer(), diedAt)) > 2000)) or respawnForced then
-                        if autoSpawnCallback then
-                            autoSpawnCallback()
-                        else
-                            spawnPlayer()
-                        end
-
-                        respawnForced = false
-                    end
-                end
-            end
-
-            if IsEntityDead(playerPed) then
-                if not diedAt then
-                    diedAt = GetGameTimer()
-                end
-            else
-                diedAt = nil
-            end
+AddEventHandler('gameEventTriggered', function (name, args)
+    if name == "CEventNetworkStartMatch" then
+        if NetworkIsPlayerActive(PlayerId()) and not fspawn then
+            spawnPlayer()
+            fspawn = true
         end
     end
 end)
+  
 
 function forceRespawn()
     spawnLock = false
